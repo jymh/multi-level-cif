@@ -93,6 +93,123 @@ class W2lDecoder(object):
         idxs = filter(lambda x: x != self.blank, idxs)
         return torch.LongTensor(list(idxs))
 
+class W2lBeamSearchDecoder(W2lDecoder):
+    def __init__(self, args, tgt_dict):
+        super().__init__(args, tgt_dict)
+
+        self.unit_lm = getattr(args, "unit_lm", False)
+
+        if args.lexicon:
+            self.lexicon = load_words(args.lexicon)
+            self.word_dict = create_word_dict(self.lexicon)
+            self.unk_word = self.word_dict.get_index("<unk>")
+
+            self.lm = KenLM(args.kenlm_model, self.word_dict)
+            self.trie = Trie(self.vocab_size, self.silence)
+
+            start_state = self.lm.start(False)
+            for i, (word, spellings) in enumerate(self.lexicon.items()):
+                word_idx = self.word_dict.get_index(word)
+                _, score = self.lm.score(start_state, word_idx)
+                for spelling in spellings:
+                    spelling_idxs = [tgt_dict.index(token) for token in spelling]
+                    assert (
+                            tgt_dict.unk() not in spelling_idxs
+                    ), f"{spelling} {spelling_idxs}"
+                    self.trie.insert(spelling_idxs, word_idx, score)
+            self.trie.smear(SmearingMode.MAX)
+
+            self.decoder_opts = LexiconDecoderOptions(
+                beam_size=args.beam,
+                beam_size_token=int(getattr(args, "beam_size_token", len(tgt_dict))),
+                beam_threshold=args.beam_threshold,
+                lm_weight=args.lm_weight,
+                word_score=args.word_score,
+                unk_score=args.unk_weight,
+                sil_score=args.sil_weight,
+                log_add=False,
+                criterion_type=self.criterion_type,
+            )
+
+            if self.asg_transitions is None:
+                N = 768
+                # self.asg_transitions = torch.FloatTensor(N, N).zero_()
+                self.asg_transitions = []
+
+            self.decoder = LexiconDecoder(
+                self.decoder_opts,
+                self.trie,
+                self.lm,
+                self.silence,
+                self.blank,
+                self.unk_word,
+                self.asg_transitions,
+                self.unit_lm,
+            )
+        else:
+            assert args.unit_lm, "lexicon free decoding can only be done with a unit language model"
+            from flashlight.lib.text.decoder import LexiconFreeDecoder, LexiconFreeDecoderOptions
+
+            d = {w: [[w]] for w in tgt_dict.symbols}
+            self.word_dict = create_word_dict(d)
+            self.lm = KenLM(args.kenlm_model, self.word_dict)
+            self.decoder_opts = LexiconFreeDecoderOptions(
+                beam_size=args.beam,
+                beam_size_token=int(getattr(args, "beam_size_token", len(tgt_dict))),
+                beam_threshold=args.beam_threshold,
+                lm_weight=args.lm_weight,
+                sil_score=args.sil_weight,
+                log_add=False,
+                criterion_type=self.criterion_type,
+            )
+            self.decoder = LexiconFreeDecoder(
+                self.decoder_opts, self.lm, self.silence, self.blank, []
+            )
+
+    def get_timesteps(self, token_idxs: List[int]) -> List[int]:
+        """Returns frame numbers corresponding to every non-blank token.
+
+        Parameters
+        ----------
+        token_idxs : List[int]
+            IDs of decoded tokens.
+
+        Returns
+        -------
+        List[int]
+            Frame numbers corresponding to every non-blank token.
+        """
+        timesteps = []
+        for i, token_idx in enumerate(token_idxs):
+            if token_idx == self.blank:
+                continue
+            if i == 0 or token_idx != token_idxs[i - 1]:
+                timesteps.append(i)
+        return timesteps
+
+    def decode(self, emissions):
+        B, T, N = emissions.size()
+        hypos = []
+        for b in range(B):
+            emissions_ptr = emissions.data_ptr() + 4 * b * emissions.stride(0)
+            results = self.decoder.decode(emissions_ptr, T, N)
+
+            nbest_results = results[: self.nbest]
+            hypos.append(
+                [
+                    {
+                        "tokens": self.get_tokens(result.tokens),
+                        "score": result.score,
+                        "timesteps": self.get_timesteps(result.tokens),
+                        "words": [
+                            self.word_dict.get_entry(x) for x in result.words if x >= 0
+                        ],
+                    }
+                    for result in nbest_results
+                ]
+            )
+        return hypos
+
 
 class W2lViterbiDecoder(W2lDecoder):
     def __init__(self, args, tgt_dict):

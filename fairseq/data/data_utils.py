@@ -372,7 +372,8 @@ def post_process(sentence: str, symbol: str):
     elif symbol == "wordpiece":
         sentence = sentence.replace(" ", "").replace("_", " ").strip()
     elif symbol == "letter":
-        sentence = sentence.replace(" ", "").replace("|", " ").strip()
+        # sentence = sentence.replace(" ", "").replace("|", " ").strip()
+        sentence = sentence.strip().replace("<unk>", "").replace("<eos>", "").replace("<bos>", "").replace("<pad>", "")
     elif symbol == "silence":
         import re
         sentence = sentence.replace("<SIL>", "")
@@ -383,6 +384,8 @@ def post_process(sentence: str, symbol: str):
         if symbol == "subword_nmt":
             symbol = "@@ "
         sentence = (sentence + " ").replace(symbol, "").rstrip()
+    elif symbol == "char":
+        sentence = sentence.strip()
     elif symbol == "none":
         pass
     elif symbol is not None:

@@ -1,0 +1,97 @@
+# @package _group_
+
+common:
+  #fp16: false
+  fp16: true
+  # log_format: json
+  log_format: simple
+  log_interval: 20
+
+checkpoint:
+  no_epoch_checkpoints: true
+  best_checkpoint_metric: loss
+
+task:
+  _name: multiscale_cif
+  data: ???
+  normalize: false
+  phone_label: ltr
+  char_label: ltr.char
+  enable_padding: True
+  autoregressive: true
+  max_sample_size: 800000
+
+dataset:
+  num_workers: 6
+  max_tokens: 800000
+  skip_invalid_size_inputs_valid_test: true
+  train_subset: train
+  valid_subset: valid
+  validate_after_updates: 1
+  validate_interval_updates: 1
+  # validate_interval: 100
+
+distributed_training:
+  ddp_backend: legacy_ddp
+  distributed_world_size: 1
+
+criterion:
+  _name: ms_cifloss
+  zero_infinity: true
+
+optimization:
+  max_update: 80000
+  lr: [5e-05]
+  sentence_avg: false
+  update_freq: [8]
+
+optimizer:
+  _name: adam
+  adam_betas: (0.9,0.98)
+  adam_eps: 1e-08
+
+lr_scheduler:
+####   _name: tri_stage
+####   phase_ratio: [0.1, 0.4, 0.5]
+####   final_lr_scale: 0.05
+  _name: tri_stage
+  #warmup_steps: 8000
+  #hold_steps: 52000
+  #decay_steps: 40000
+  phase_ratio: [0.1, 0.4, 0.5]
+  final_lr_scale: 0.05
+
+model:
+  _name: wav2vec_mscif
+  w2v_path: ???
+  encode_embed_dim: 768
+  apply_mask: true
+  mask_prob: 0.5
+  mask_channel_prob: 0.25
+  mask_channel_length: 64
+  layerdrop: 0.1
+  activation_dropout: 0.1
+  feature_grad_mult: 0.0
+  #freeze_finetune_updates: 10000
+  ####freeze_finetune_updates: 8000
+  freeze_finetune_updates: 0
+
+  #cif_embedding_dim: 1024
+  #produce_weight_type: "conv"
+  #cif_threshold: 0.99
+  #conv_cif_layer_num: 1
+  #conv_cif_output_channels_num: 1024
+  #conv_cif_dropout: 0.0
+  #dense_cif_units_num: 1024
+  #apply_scaling: true
+  #apply_tail_handling: true
+
+  decoder_path: ???
+  decoder_embed_dim: 512
+  #decoder_ffn_embed_dim: 2560
+  #decoder_layerdrop: 0.0
+  #decoder_dropout: 0.1
+  #decoder_attention_dropout: 0.1
+  #decoder_activation_dropout: 0.1
+  #share_decoder_input_output_embed: false
+

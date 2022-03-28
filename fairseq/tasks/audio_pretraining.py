@@ -20,7 +20,6 @@ from fairseq.data.text_compressor import TextCompressionLevel
 
 from . import FairseqTask, register_task
 
-
 logger = logging.getLogger(__name__)
 
 

@@ -83,7 +83,30 @@ output units",
         default=None,
         help="if present, loads emissions from this file",
     )
+
+    # Decoding Cif
+    parser.add_argument(
+        "--cif-decoder",
+        choices=["vanilla_cif"],
+        help="use a cif decoder",
+    )
+    parser.add_argument(
+        "--cif-decoder-mode",
+        choices=["ar", "nar"],
+        help="the mode of cif decoder",
+    )
+    parser.add_argument(
+        "--cif-mode",
+        choices=["normal", "multiscale"],
+        help="the mode of cif",
+    )
+    parser.add_argument(
+        "--decoding-granularity",
+        choices=["phone", "char"],
+        help="granularity of cif output",
+    )
     return parser
+
 
 
 def check_args(args):
@@ -240,7 +263,13 @@ def main(args, task=None, model_state=None):
 
 
     # Set dictionary
-    tgt_dict = task.target_dictionary
+    if args.cif_mode == "multiscale":
+        if args.decoding_granularity == "char":
+            tgt_dict = task.target_char_dictionary
+        elif args.decoding_granularity == "phone":
+            tgt_dict = task.target_phone_dictionary
+    else:
+        tgt_dict = task.target_dictionary
 
     logger.info(
         "| {} {} {} examples".format(
@@ -262,22 +291,35 @@ def main(args, task=None, model_state=None):
 
     def build_generator(args):
         w2l_decoder = getattr(args, "w2l_decoder", None)
-        if w2l_decoder == "viterbi":
-            from examples.speech_recognition.w2l_decoder import W2lViterbiDecoder
+        cif_decoder = getattr(args, "cif_decoder", None)
 
-            return W2lViterbiDecoder(args, task.target_dictionary)
-        elif w2l_decoder == "kenlm":
-            from examples.speech_recognition.w2l_decoder import W2lKenLMDecoder
+        if w2l_decoder:
+            if w2l_decoder == "viterbi":
+                from examples.speech_recognition.w2l_decoder import W2lViterbiDecoder
 
-            return W2lKenLMDecoder(args, task.target_dictionary)
-        elif w2l_decoder == "fairseqlm":
-            from examples.speech_recognition.w2l_decoder import W2lFairseqLMDecoder
+                return W2lViterbiDecoder(args, task.target_dictionary)
+            elif w2l_decoder == "kenlm":
+                from examples.speech_recognition.w2l_decoder import W2lKenLMDecoder
 
-            return W2lFairseqLMDecoder(args, task.target_dictionary)
-        else:
-            print(
-                "only flashlight decoders with (viterbi, kenlm, fairseqlm) options are supported at the moment"
-            )
+                return W2lKenLMDecoder(args, task.target_dictionary)
+            elif w2l_decoder == "fairseqlm":
+                from examples.speech_recognition.w2l_decoder import W2lFairseqLMDecoder
+
+                return W2lFairseqLMDecoder(args, task.target_dictionary)
+            else:
+                print(
+                    "only flashlight decoders with (viterbi, kenlm, fairseqlm) options are supported at the moment"
+                )
+        elif cif_decoder:
+            if cif_decoder == "vanilla_cif":
+                from examples.speech_recognition.cif_decoder import CifVanillaDecoder
+                if args.cif_mode == "normal":
+                    return CifVanillaDecoder(args, task.target_dictionary)
+                elif args.cif_mode == "multiscale":
+                    if args.decoding_granularity == "char":
+                        return CifVanillaDecoder(args, task.target_char_dictionary)
+                    elif args.decoding_granularity == "phone":
+                        return CifVanillaDecoder(args, task.target_phone_dictionary, use_phone=True)
 
     # please do not touch this unless you test both generate.py and infer.py with audio_pretraining task
     generator = build_generator(args)
@@ -335,6 +377,7 @@ def main(args, task=None, model_state=None):
                     continue
             elif args.dump_features:
                 with torch.no_grad():
+                    '''
                     encoder_out = models[0](**sample["net_input"])
                     feat = encoder_out["encoder_out"].transpose(0, 1).cpu().numpy()
                     for i, id in enumerate(sample["id"]):
@@ -344,7 +387,56 @@ def main(args, task=None, model_state=None):
                             else None
                         )
                         features[id.item()] = (feat[i], padding)
-                    continue
+                    '''
+
+                    model_inputs = {
+                        k: v for k, v in sample["net_input"].items() if k != "prev_output_tokens"
+                    }
+
+                    if args.cif_mode == "normal":
+                        cif_outputs = models[0].get_cif_output(
+                            target_lengths=None, **model_inputs
+                        )
+                        feat = cif_outputs["cif_out"].cpu().numpy()
+                        for i, _id in enumerate(sample["id"]):
+                            padding = cif_outputs["padding_mask"][i].cpu().numpy()
+                            target = sample["target"][:, :-1][i].cpu().numpy()
+                            target_lengths = sample["target_lengths"][i].cpu().numpy()
+                            utt_id = sample["net_input"]["utt_id"][i]
+                            features[_id.item()] = (utt_id, feat[i], padding, target, target_lengths)
+                        continue
+                    elif args.cif_mode == "multiscale":
+                        if args.decoding_granularity == "char":
+                            cif_outputs = models[0].get_cif_output(
+                                target_lengths=None, **model_inputs
+                            )
+                            feat = cif_outputs["cif_out"].cpu().numpy()
+                            for i, _id in enumerate(sample["id"]):
+                                padding = cif_outputs["padding_mask"][i].cpu().numpy()
+                                c_sample = sample["c_sample"]
+                                target = c_sample["target"][:, :-1][i].cpu().numpy()
+                                target_lengths = c_sample["target_lengths"][i].cpu().numpy()
+                                utt_id = sample["net_input"]["utt_id"][i]
+                                features[_id.item()] = (utt_id, feat[i], padding, target, target_lengths)
+                            sample["target"] = c_sample["target"]
+                            sample["nsentences"] = c_sample["nsentences"]
+                            continue
+                        if args.decoding_granularity == "phone":
+                            cif_outputs = models[0].get_phone_output(
+                                target_lengths=None, **model_inputs
+                            )
+                            feat = cif_outputs["cif_out"].cpu().numpy()
+                            for i, _id in enumerate(sample["id"]):
+                                padding = cif_outputs["padding_mask"][i].cpu().numpy()
+                                p_sample = sample["p_sample"]
+                                target = p_sample["target"][:, :-1][i].cpu().numpy()
+                                target_lengths = p_sample["target_lengths"][i].cpu().numpy()
+                                utt_id = sample["net_input"]["utt_id"][i]
+                                features[_id.item()] = (utt_id, feat[i], padding, target, target_lengths)
+                            sample["target"] = p_sample["target"]
+                            sample["nsentences"] = p_sample["nsentences"]
+                            continue
+
             hypos = task.inference_step(generator, models, sample, prefix_tokens)
             num_generated_tokens = sum(len(h[0]["tokens"]) for h in hypos)
             gen_timer.stop(num_generated_tokens)
@@ -353,11 +445,21 @@ def main(args, task=None, model_state=None):
                 speaker = None
                 # id = task.dataset(args.gen_subset).ids[int(sample_id)]
                 id = sample_id
-                toks = (
-                    sample["target"][i, :]
-                    if "target_label" not in sample
-                    else sample["target_label"][i, :]
-                )
+                if args.cif_mode == "normal":
+                    toks = (
+                        sample["target"][i, :]
+                        if "target_label" not in sample
+                        else sample["target_label"][i, :]
+                    )
+                elif args.cif_mode == "multiscale":
+                    if args.decoding_granularity == "char":
+                        toks = (
+                            sample["c_sample"]["target"][i, :]
+                        )
+                    elif args.decoding_granularity == "phone":
+                        toks = (
+                            sample["p_sample"]["target"][i, :]
+                        )
                 target_tokens = utils.strip_pad(toks, tgt_dict.pad()).int().cpu()
                 # Process top predictions
                 errs, length = process_predictions(

@@ -26,7 +26,7 @@ distributed_training:
   distributed_world_size: 2
 
 criterion:
-  _name: ctc
+  _name: cif_loss
   zero_infinity: true
 
 optimization:
@@ -46,7 +46,7 @@ lr_scheduler:
   final_lr_scale: 0.05
 
 model:
-  _name: wav2vec_ctc
+  _name: wav2vec_cif
   w2v_path: ???
   apply_mask: true
   mask_prob: 0.65
@@ -56,5 +56,3 @@ model:
   activation_dropout: 0.1
   feature_grad_mult: 0.0
   freeze_finetune_updates: 0
-
-
