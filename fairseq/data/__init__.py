@@ -12,6 +12,7 @@ from .base_wrapper_dataset import BaseWrapperDataset
 
 from .add_target_dataset import AddTargetDataset
 from .add_multi_targets_dataset import AddMultiTargetsDataset
+from .add_lexicon_constraint_ml_dataset import AddLexiconConstraintMlDataset
 from .append_token_dataset import AppendTokenDataset
 from .audio.raw_audio_dataset import BinarizedAudioDataset, FileAudioDataset
 from .audio.hubert_dataset import HubertDataset
@@ -69,6 +70,7 @@ from .iterators import (
 __all__ = [
     "AddTargetDataset",
     "AddMultiTargetsDataset",
+    "AddLexiconConstraintMlDataset",
     "AppendTokenDataset",
     "BacktranslationDataset",
     "BaseWrapperDataset",

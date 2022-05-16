@@ -7,6 +7,8 @@
 import logging
 import os
 
+
+
 from fairseq.dataclass.initialize import add_defaults, hydra_init
 from fairseq_cli.train import main as pre_main
 from fairseq import distributed_utils, metrics
@@ -85,8 +87,6 @@ def cli_main():
 
 
 if __name__ == "__main__":
-    import os
-
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = ""
 

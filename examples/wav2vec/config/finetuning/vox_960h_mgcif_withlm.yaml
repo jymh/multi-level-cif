@@ -9,16 +9,18 @@ common:
 
 checkpoint:
   no_epoch_checkpoints: true
-  best_checkpoint_metric: loss
+  best_checkpoint_metric: wer
+  keep_interval_updates: 10
 
 task:
-  _name: audio_finetuning
+  _name: multiscale_cif
   data: ???
   normalize: false
-  labels: ltr.char
+  phone_label: ltr
+  char_label: ltr.char
+  enable_padding: true
   autoregressive: true
-  max_sample_size: 400000
-  #max_sample_size: 800000
+  max_sample_size: 800000
 
 dataset:
   num_workers: 6
@@ -26,8 +28,8 @@ dataset:
   skip_invalid_size_inputs_valid_test: true
   train_subset: train
   valid_subset: valid
-  validate_after_updates: 1000000
-  validate_interval_updates: 2000
+  validate_after_updates: 1
+  validate_interval_updates: 1
   # validate_interval: 100
 
 distributed_training:
@@ -35,7 +37,7 @@ distributed_training:
   distributed_world_size: 1
 
 criterion:
-  _name: cif_loss
+  _name: ms_cifloss
   zero_infinity: true
 
 optimization:
@@ -61,7 +63,7 @@ lr_scheduler:
   final_lr_scale: 0.05
 
 model:
-  _name: wav2vec_cif
+  _name: wav2vec_mscif
   w2v_path: ???
   encode_embed_dim: 768
   apply_mask: true
@@ -73,23 +75,26 @@ model:
   feature_grad_mult: 0.0
   #freeze_finetune_updates: 10000
   ####freeze_finetune_updates: 8000
-  freeze_finetune_updates: 0
+  freeze_finetune_updates: 8000
 
-  cif_embedding_dim: 1024
-  produce_weight_type: "conv"
-  cif_threshold: 0.99
-  conv_cif_layer_num: 1
-  conv_cif_output_channels_num: 1024
-  conv_cif_dropout: 0.0
-  dense_cif_units_num: 1024
-  apply_scaling: true
-  apply_tail_handling: true
+  #cif_embedding_dim: 1024
+  #produce_weight_type: "conv"
+  #cif_threshold: 0.99
+  #conv_cif_layer_num: 1
+  #conv_cif_output_channels_num: 1024
+  #conv_cif_dropout: 0.0
+  #dense_cif_units_num: 1024
+  #apply_scaling: true
+  #apply_tail_handling: true
 
   decoder_path: ???
   decoder_embed_dim: 512
-  decoder_layerdrop: 0.0
-  decoder_dropout: 0.1
+  #decoder_ffn_embed_dim: 2560
+  decoder_layerdrop: 0.1
+  decoder_dropout: 0.2
   decoder_attention_dropout: 0.1
-  decoder_activation_dropout: 0.1
+  decoder_activation_dropout: 0.2
   share_decoder_input_output_embed: false
+
+  apply_joint_cnn: true
 

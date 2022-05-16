@@ -61,13 +61,13 @@ class MultiScaleCifLossCriterionConfig(FairseqDataclass):
     )
 
     apply_align_loss: bool = field(
-        default=True,
+        default=False,
         metadata={"help": "whether to apply ctc alignment loss"},
     )
 
 
-@register_criterion("ms_cifloss", dataclass=MultiScaleCifLossCriterionConfig)
-class MultiScaleCifLossCriterion(FairseqCriterion):
+@register_criterion("lexicon_constraint_ml_cifloss", dataclass=MultiScaleCifLossCriterionConfig)
+class LexiconConstraintMultiLevelCifLossCriterion(FairseqCriterion):
     def __init__(self, cfg: MultiScaleCifLossCriterionConfig, task: FairseqTask):
         super().__init__(task)
 
@@ -119,9 +119,14 @@ class MultiScaleCifLossCriterion(FairseqCriterion):
         p_target = p_sample["target"]
         c_target = c_sample["target"]
 
+        phone_segs = sample["phone_segs"]
+        integrate_weights = sample["integrate_weights"]
+
         net_output = model(
             phone_target_lengths=p_sample["target_lengths"]+1,
             char_target_lengths=c_sample["target_lengths"]+1,
+            phone_segs = phone_segs,
+            integrate_weights = integrate_weights,
             **sample["net_input"]
         )
 
@@ -157,7 +162,7 @@ class MultiScaleCifLossCriterion(FairseqCriterion):
         c_qua_loss = torch.tensor(0.0).type_as(c_target)
         if self.apply_qua_loss:
             p_qua_loss = self.computeQualoss(phone_cif_outputs["qua_out"], p_sample)
-            c_qua_loss = self.computeQualoss(joint_outputs["qua_out"], c_sample)
+            c_qua_loss = joint_outputs["qua_out"]
 
         ctc_loss = torch.tensor(0.0).type_as(p_target)
         if self.apply_ctc_loss:

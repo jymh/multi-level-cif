@@ -27,7 +27,7 @@ dataset:
   skip_invalid_size_inputs_valid_test: true
   train_subset: train
   valid_subset: valid
-  validate_after_updates: 1
+  validate_after_updates: 0
   validate_interval_updates: 1
   # validate_interval: 100
 
@@ -86,7 +86,6 @@ model:
   #apply_scaling: true
   #apply_tail_handling: true
 
-  decoder_path: ???
   decoder_embed_dim: 512
   #decoder_ffn_embed_dim: 2560
   #decoder_layerdrop: 0.0
@@ -94,4 +93,5 @@ model:
   #decoder_attention_dropout: 0.1
   #decoder_activation_dropout: 0.1
   #share_decoder_input_output_embed: false
+
 
